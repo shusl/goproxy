@@ -1,15 +1,17 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"syscall"
 
 	"github.com/snail007/goproxy/services"
 )
 
-const APP_VERSION = "5.3"
+var APP_VERSION = "No Version Provided"
 
 func main() {
 	err := initConfig()
@@ -32,7 +34,12 @@ func Clean(s *services.Service) {
 		syscall.SIGTERM,
 		syscall.SIGQUIT)
 	go func() {
-		for _ = range signalChan {
+		defer func() {
+			if e := recover(); e != nil {
+				fmt.Printf("crashed, err: %s\nstack:\n%s", e, string(debug.Stack()))
+			}
+		}()
+		for range signalChan {
 			log.Println("Received an interrupt, stopping services...")
 			if s != nil && *s != nil {
 				(*s).Clean()
@@ -41,11 +48,12 @@ func Clean(s *services.Service) {
 				log.Printf("clean process %d", cmd.Process.Pid)
 				cmd.Process.Kill()
 			}
-			if isDebug {
+			if *isDebug {
 				saveProfiling()
 			}
 			cleanupDone <- true
 		}
 	}()
 	<-cleanupDone
+	os.Exit(0)
 }
